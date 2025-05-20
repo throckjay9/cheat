@@ -1,93 +1,228 @@
--- LocalScript em StarterPlayerScripts
+--script garena free fire max-- 
 
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local player = Players.LocalPlayer
 
--- Criar a GUI
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "FF_GUI"
-screenGui.ResetOnSpawn = false
-screenGui.Parent = player:WaitForChild("PlayerGui")
+local localPlayer = Players.LocalPlayer
+local camera = workspace.CurrentCamera
 
--- Criar o Frame da GUI
-local mainFrame = Instance.new("Frame")
-mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0.3, 0, 0.35, 0)
-mainFrame.Position = UDim2.new(0.35, 0, 0.15, 0)
-mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-mainFrame.BackgroundTransparency = 0.1
-mainFrame.BorderSizePixel = 0
-mainFrame.Visible = false
-mainFrame.Parent = screenGui
+-- Configurações
+local AimbotKey = Enum.KeyCode.E
+local ESPKey = Enum.KeyCode.Q
+local AimbotEnabled = false
+local ESPEnabled = false
+local AimbotSmoothness = 10 -- Quanto maior, mais suave (mas mais lento)
+local HeadOffset = Vector3.new(0, 1.5, 0) -- Ajuste para mirar na cabeça
 
--- UICorner para cantos arredondados no Frame
-local frameCorner = Instance.new("UICorner")
-frameCorner.CornerRadius = UDim.new(0, 12)
-frameCorner.Parent = mainFrame
+-- Cores ESP
+local BoxColor = Color3.fromRGB(255, 0, 0)
+local LineColor = Color3.fromRGB(0, 255, 0)
+local TextColor = Color3.fromRGB(255, 255, 255)
 
--- Título da GUI
-local titleLabel = Instance.new("TextLabel")
-titleLabel.Name = "TitleLabel"
-titleLabel.Size = UDim2.new(1, 0, 0.2, 0)
-titleLabel.Position = UDim2.new(0, 0, 0, 0)
-titleLabel.BackgroundTransparency = 1
-titleLabel.Text = "🧠 FF MAX MENU"
-titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-titleLabel.TextScaled = true
-titleLabel.Font = Enum.Font.GothamBold
-titleLabel.Parent = mainFrame
+-- Tabela para armazenar as partes do ESP
+local ESPParts = {}
 
--- Função para criar botões estilizados
-local function createButton(text, positionY)
-	local button = Instance.new("TextButton")
-	button.Size = UDim2.new(0.8, 0, 0.18, 0)
-	button.Position = UDim2.new(0.1, 0, positionY, 0)
-	button.Text = text
-	button.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-	button.TextColor3 = Color3.fromRGB(255, 255, 255)
-	button.Font = Enum.Font.Gotham
-	button.TextScaled = true
-	button.AutoButtonColor = true
-	button.Parent = mainFrame
-
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 8)
-	corner.Parent = button
-
-	return button
+-- Função para criar uma caixa ESP
+local function CreateBoxESP(player)
+    if ESPParts[player] then return end
+    
+    local character = player.Character or player.CharacterAdded:Wait()
+    if not character then return end
+    
+    local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+    local head = character:WaitForChild("Head")
+    
+    -- Caixa
+    local box = Instance.new("BoxHandleAdornment")
+    box.Name = "ESPBox"
+    box.Adornee = humanoidRootPart
+    box.AlwaysOnTop = true
+    box.ZIndex = 10
+    box.Size = Vector3.new(3, 5, 3)
+    box.Transparency = 0.5
+    box.Color3 = BoxColor
+    box.Parent = humanoidRootPart
+    
+    -- Linha
+    local line = Instance.new("LineHandleAdornment")
+    line.Name = "ESPLine"
+    line.Adornee = humanoidRootPart
+    line.AlwaysOnTop = true
+    line.ZIndex = 5
+    line.Length = (humanoidRootPart.Position - camera.CFrame.Position).Magnitude
+    line.Thickness = 1
+    line.Transparency = 0.7
+    line.Color3 = LineColor
+    line.Parent = humanoidRootPart
+    
+    -- Texto (nome e distância)
+    local text = Instance.new("BillboardGui")
+    text.Name = "ESPText"
+    text.Adornee = head
+    text.AlwaysOnTop = true
+    text.Size = UDim2.new(0, 100, 0, 40)
+    text.StudsOffset = Vector3.new(0, 2.5, 0)
+    
+    local nameLabel = Instance.new("TextLabel", text)
+    nameLabel.Size = UDim2.new(1, 0, 0.5, 0)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Text = player.Name
+    nameLabel.TextColor3 = TextColor
+    nameLabel.TextScaled = true
+    
+    local distanceLabel = Instance.new("TextLabel", text)
+    distanceLabel.Size = UDim2.new(1, 0, 0.5, 0)
+    distanceLabel.Position = UDim2.new(0, 0, 0.5, 0)
+    distanceLabel.BackgroundTransparency = 1
+    distanceLabel.TextColor3 = TextColor
+    distanceLabel.TextScaled = true
+    
+    text.Parent = head
+    
+    ESPParts[player] = {
+        Box = box,
+        Line = line,
+        Text = text,
+        NameLabel = nameLabel,
+        DistanceLabel = distanceLabel
+    }
 end
 
--- Criar os botões
-local aimbotOn = false
-local aimbotButton = createButton("Ativar Aimbot", 0.25)
-aimbotButton.MouseButton1Click:Connect(function()
-	aimbotOn = not aimbotOn
-	aimbotButton.Text = aimbotOn and "Desativar Aimbot" or "Ativar Aimbot"
-	print("Aimbot:", aimbotOn)
-end)
+-- Função para atualizar o ESP
+local function UpdateESP()
+    for player, parts in pairs(ESPParts) do
+        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local rootPart = player.Character.HumanoidRootPart
+            local distance = (rootPart.Position - camera.CFrame.Position).Magnitude
+            
+            -- Atualizar linha
+            parts.Line.Length = distance
+            parts.Line.CFrame = CFrame.new(rootPart.Position, camera.CFrame.Position)
+            
+            -- Atualizar texto de distância
+            parts.DistanceLabel.Text = tostring(math.floor(distance)) .. "m"
+        end
+    end
+end
 
-local espBoxOn = false
-local espBoxButton = createButton("Ativar ESP Caixa", 0.47)
-espBoxButton.MouseButton1Click:Connect(function()
-	espBoxOn = not espBoxOn
-	espBoxButton.Text = espBoxOn and "Desativar ESP Caixa" or "Ativar ESP Caixa"
-	print("ESP Caixa:", espBoxOn)
-end)
+-- Função para limpar o ESP de um jogador
+local function ClearESP(player)
+    if ESPParts[player] then
+        for _, part in pairs(ESPParts[player]) do
+            if part and part.Parent then
+                part:Destroy()
+            end
+        end
+        ESPParts[player] = nil
+    end
+end
 
-local espLineOn = false
-local espLineButton = createButton("Ativar ESP Linha", 0.69)
-espLineButton.MouseButton1Click:Connect(function()
-	espLineOn = not espLineOn
-	espLineButton.Text = espLineOn and "Desativar ESP Linha" or "Ativar ESP Linha"
-	print("ESP Linha:", espLineOn)
-end)
+-- Função para limpar todo o ESP
+local function ClearAllESP()
+    for player in pairs(ESPParts) do
+        ClearESP(player)
+    end
+end
 
--- Toggle da GUI com tecla T (ou mude pra outra se quiser)
-local guiVisible = false
+-- Função para encontrar o inimigo mais próximo
+local function GetClosestEnemy()
+    local closestPlayer = nil
+    local closestDistance = math.huge
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= localPlayer and player.Character and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
+            local rootPart = player.Character:FindFirstChild("HumanoidRootPart")
+            if rootPart then
+                local distance = (rootPart.Position - localPlayer.Character.HumanoidRootPart.Position).Magnitude
+                if distance < closestDistance then
+                    closestDistance = distance
+                    closestPlayer = player
+                end
+            end
+        end
+    end
+    
+    return closestPlayer
+end
+
+-- Aimbot
+local function Aimbot()
+    if not AimbotEnabled or not localPlayer.Character or not localPlayer.Character:FindFirstChild("Humanoid") or localPlayer.Character.Humanoid.Health <= 0 then
+        return
+    end
+    
+    local target = GetClosestEnemy()
+    if not target or not target.Character or not target.Character:FindFirstChild("Head") then
+        return
+    end
+    
+    local head = target.Character.Head
+    local targetPosition = head.Position + HeadOffset
+    
+    -- Suavizar o movimento do aimbot
+    local currentCameraCFrame = camera.CFrame
+    local targetCFrame = CFrame.new(currentCameraCFrame.Position, targetPosition)
+    camera.CFrame = currentCameraCFrame:Lerp(targetCFrame, 1/AimbotSmoothness)
+end
+
+-- Ativar/Desativar Aimbot
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if not gameProcessed and input.KeyCode == Enum.KeyCode.T then
-		guiVisible = not guiVisible
-		mainFrame.Visible = guiVisible
-	end
+    if gameProcessed then return end
+    
+    if input.KeyCode == AimbotKey then
+        AimbotEnabled = not AimbotEnabled
+        print("Aimbot " .. (AimbotEnabled and "ativado" or "desativado"))
+    elseif input.KeyCode == ESPKey then
+        ESPEnabled = not ESPEnabled
+        print("ESP " .. (ESPEnabled and "ativado" or "desativado"))
+        
+        if ESPEnabled then
+            -- Criar ESP para todos os jogadores existentes
+            for _, player in pairs(Players:GetPlayers()) do
+                if player ~= localPlayer then
+                    CreateBoxESP(player)
+                end
+            end
+        else
+            ClearAllESP()
+        end
+    end
 end)
+
+-- Conectar eventos de jogadores
+Players.PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Connect(function(character)
+        if ESPEnabled then
+            CreateBoxESP(player)
+        end
+    end)
+    
+    player.CharacterRemoving:Connect(function()
+        ClearESP(player)
+    end)
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    ClearESP(player)
+end)
+
+-- Loop principal
+RunService.RenderStepped:Connect(function()
+    if ESPEnabled then
+        UpdateESP()
+    end
+    
+    Aimbot()
+end)
+
+-- Inicializar ESP para jogadores existentes (se ativado)
+if ESPEnabled then
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= localPlayer then
+            CreateBoxESP(player)
+        end
+    end
+end
+
+print("Script carregado. Pressione E para ativar/desativar aimbot e Q para ativar/desativar ESP.")
